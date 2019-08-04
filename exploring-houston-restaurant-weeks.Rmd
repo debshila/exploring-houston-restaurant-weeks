@@ -1,0 +1,42 @@
+---
+title: "Exploring Houston Restaurant Weeks"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(jsonlite)
+library(stringr)
+library(leaflet)
+```
+
+
+```{r}
+url <- "https://www.houstonrestaurantweeks.com/"
+hrw_pg <- read_html(url)    
+
+#Using CSS selectors to scrape the restaurants
+restaurant_html <- html_nodes(hrw_pg,'li a')
+```
+
+```{r warning=FALSE}
+restaurant_names <- trimws(html_text(restaurant_html))
+
+restaurant_lat_lon <- bind_rows(lapply(13:length(restaurant_html), function(idx){
+    coordinates <- str_extract(restaurant_html[[idx]], pattern = "-\\d+\\.\\d+, \\d+\\.\\d+")
+    data.frame(name = restaurant_names[idx], coordinates) %>% 
+        mutate(coordinates = gsub("\\s", "", coordinates)) %>% 
+        separate(coordinates, into = c("longitude", "latitude"), sep = ",") %>% 
+        mutate(latitude = as.numeric(latitude), longitude = as.numeric(longitude))
+}))
+
+```
+
+```{r}
+restaurant_lat_lon %>% 
+    leaflet(.) %>% 
+    addTiles() %>% 
+    addMarkers()
+```
+
