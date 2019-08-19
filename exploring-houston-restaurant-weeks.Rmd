@@ -1,52 +1,117 @@
 ---
-title: "Exploring Houston Restaurant Weeks"
-output: html_document
+title: "Houston Restaurant Weeks, 2019"
+resource_files:
+- hrw_menus.csv
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    theme: cerulean
+    vertical_layout: scroll
 ---
 
 ```{r}
+knitr::opts_chunk$set(fig.width=8, fig.height=5, echo=FALSE, warning=FALSE, message=FALSE, error = FALSE, fig.pos='center', cache=FALSE, progress=TRUE)
+
+options(shiny.error =  function() {
+    stop("")
+  },
+  shiny.reactlog = TRUE,
+  shiny.sanitize.errors = FALSE)
+
+# Get packages ------------------------------------------------------------
 library(tidyverse)
-library(rvest)
-library(jsonlite)
-library(stringr)
+library(shiny)
+library(flexdashboard)
+library(DT)
 library(leaflet)
 ```
 
 
 ```{r}
-url <- "https://www.houstonrestaurantweeks.com/"
-hrw_pg <- read_html(url)    
-
-#Using CSS selectors to scrape the restaurants
-restaurant_html <- html_nodes(hrw_pg,'li a')
+all_menus <- read_csv("hrw_menus.csv") %>% 
+    mutate(url = paste0("<a href='",url,"'>",name,"</a>"),
+           content = paste(url, address, phone, sep = "<br/>")) 
 ```
 
-```{r warning=FALSE}
-restaurant_names <- trimws(html_text(restaurant_html))
 
-restaurant_coord <- bind_rows(lapply(13:length(restaurant_html), function(idx){
-    coordinates <- str_extract(restaurant_html[[idx]], pattern = "-\\d+\\.\\d+, \\d+\\.\\d+")
-    data.frame(name = restaurant_names[idx], coordinates) %>% 
-        mutate(coordinates = gsub("\\s", "", coordinates)) %>% 
-        separate(coordinates, into = c("longitude", "latitude"), sep = ",") %>% 
-        mutate(latitude = as.numeric(latitude), longitude = as.numeric(longitude),
-               hrw_url = paste0("https://www.houstonrestaurantweeks.com/#menu-", 
-                                tolower(gsub(" ", "-", name)))) 
-}))
 
-```
 
-```{r}
-read_html(restaurant_coord$hrw_url[1]) %>% 
-    html_nodes('div h2') %>% 
-    html_text() 
-
-```
 
 
 ```{r}
-restaurant_lat_lon %>% 
-    leaflet(.) %>% 
-    addTiles() %>% 
-    addMarkers()
+filt_menus <- reactive({
+  if(input$name == "All restaurants"){
+    all_menus
+  } else{
+    all_menus %>% 
+      dplyr::filter(name %in% input$name) 
+  }
+})
+
+```
+
+Home
+=================================================================
+Column {.sidebar}
+-----------------------------------------------------------------------
+```{r filters}
+selectizeInput("name", 
+               "Restaurant Name",         
+               choices = c("All restaurants", unique(all_menus$name)),
+               multiple = TRUE,
+               width = '100%',
+               selected = "All restaurants")
+
+```
+
+row
+---------------------------------------------------------------
+### Houston Restaurant Weeks headcount
+
+```{r}
+renderValueBox({
+    valueBox(value = n_distinct(all_menus$url), 
+           caption = "<b># of Restaurants offering HRW and parsed</b>", 
+           icon = "fa-cutlery", 
+           color = "#77AF43")
+
+})
+```
+
+Column {data-height=800, data-width=800, style="height:100pc;" .tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### HRW maps
+```{r geolocate}
+renderLeaflet({
+  filt_menus() %>%
+    distinct(latitude, longitude, content) %>% 
+    leaflet(., options = leafletOptions(
+                zoomControl = TRUE)) %>%
+    addTiles() %>%
+    addMarkers(lat = ~latitude, lng = ~longitude, 
+               popup = ~content) 
+})
+  
+    
+```
+
+### Table view of HRW
+```{r}
+DT::renderDataTable(filt_menus() %>% 
+                      select(-latitude, -longitude, -name, -content, -meal_idx), 
+                    extensions = "Responsive", 
+                    escape = FALSE,
+                    filter = list(position = 'top', clear = TRUE, plain = FALSE),
+                    options = list(
+                      columnDefs = list(list(className = 'dt-center', targets = 5)),
+                      searchHighlight = TRUE,
+                                    pageLength = 20,
+                                    fixedColumns = TRUE,
+                                    autoWidth = TRUE,
+                                    ordering = TRUE))
+
 ```
 
