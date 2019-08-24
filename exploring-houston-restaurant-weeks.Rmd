@@ -30,14 +30,8 @@ library(leaflet)
 
 
 ```{r}
-all_menus <- read_csv("hrw_menus.csv") %>% 
-    mutate(url = paste0("<a href='",url,"'>",name,"</a>"),
-           content = paste(url, address, phone, sep = "<br/>")) 
+all_menus <- read_csv("hrw_menus.csv") 
 ```
-
-
-
-
 
 
 ```{r}
@@ -51,6 +45,27 @@ filt_menus <- reactive({
 })
 
 ```
+
+```{r}
+offerings <- reactive({
+  filt_menus() %>%
+    group_by(restaurant_url, name, latitude, longitude, address, phone) %>%
+    summarise(meals = n_distinct(meal_idx),
+              course = n_distinct(course_num),
+              items = n_distinct(item)) %>% 
+    arrange(desc(items)) %>% 
+    ungroup() %>% 
+    mutate(url_ = paste0("<a href='", restaurant_url,"'>",name,"</a>"),
+           content = paste(url_, address, phone, 
+                           paste("# of meals =", meals), 
+                           paste("# of courses =", course),
+                           paste("# of items =", items),
+                           sep = "<br/>")) 
+    })
+
+
+```
+
 
 Home
 =================================================================
@@ -80,14 +95,13 @@ renderValueBox({
 })
 ```
 
-Column {data-height=800, data-width=800, style="height:100pc;" .tabset .tabset-fade}
+Column {data-height=1000, data-width=800, style="height:100pc;" .tabset .tabset-fade}
 -----------------------------------------------------------------------
 
 ### HRW maps
-```{r geolocate}
-renderLeaflet({
-  filt_menus() %>%
-    distinct(latitude, longitude, content) %>% 
+```{r geolocate,fig.width=12, fig.height=8}
+output$hrw_map <- renderLeaflet({
+  offerings() %>%
     leaflet(., options = leafletOptions(
                 zoomControl = TRUE)) %>%
     addTiles() %>%
@@ -95,20 +109,28 @@ renderLeaflet({
                popup = ~content) 
 })
   
-    
+leafletOutput('hrw_map', height = 400)    
 ```
+
+
+Search restaurant details
+=================================================================
+
+Column {data-height=10000, data-width=1000, style="height:100pc;" .tabset .tabset-fade}
+-----------------------------------------------------------------------
 
 ### Table view of HRW
 ```{r}
 DT::renderDataTable(filt_menus() %>% 
-                      select(-latitude, -longitude, -name, -content, -meal_idx), 
-                    extensions = "Responsive", 
-                    escape = FALSE,
-                    filter = list(position = 'top', clear = TRUE, plain = FALSE),
-                    options = list(
+                      select(-latitude, -longitude, -name), 
+                      extensions = "Responsive", 
+                      escape = FALSE,
+                      filter = list(position = 'top', clear = TRUE, plain = FALSE),
+                      options = list(
                       columnDefs = list(list(className = 'dt-center', targets = 5)),
-                      searchHighlight = TRUE,
+                                    searchHighlight = TRUE,
                                     pageLength = 20,
+                                    fixedHeader = TRUE,
                                     fixedColumns = TRUE,
                                     autoWidth = TRUE,
                                     ordering = TRUE))
