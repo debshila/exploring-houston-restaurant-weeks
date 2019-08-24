@@ -6,7 +6,7 @@ library(rvest)
 library(jsonlite)
 library(stringr)
 library(leaflet)
-library(ggmap)
+
 # Scrape HRW page ---------------------------------------------------------
 url <- "https://www.houstonrestaurantweeks.com/"
 hrw_pg <- read_html(url)
@@ -182,11 +182,13 @@ urls_left <- urls_left[!is.na(urls_left)]
 # })))
 
 all_menus <- all_menus %>%
-    left_join(restaurant_coord, by = "url") #%>% View()
-    #separate(cuisine_desc, into = paste0("tags", 1:4), sep = "_") #%>% View()
+    left_join(restaurant_coord, by = "url") %>%
+    group_by(url) %>%
+    mutate(meal = if_else(cost == 45, "Dinner", "lunch/brunch")) %>%
+    rename(restaurant_url = url)
 
 all_menus %>%
-    write_csv("~/Box Sync/hrw_menus.csv")
+    write_csv("~/Box Sync/hrw/hrw_menus.csv")
 
 offerings <- all_menus %>%
     group_by(name) %>%
