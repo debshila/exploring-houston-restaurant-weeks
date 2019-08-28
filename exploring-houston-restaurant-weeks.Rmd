@@ -30,7 +30,9 @@ library(leaflet)
 
 
 ```{r}
-all_menus <- read_csv("hrw_menus.csv") 
+all_menus <- read_csv("hrw_menus.csv") %>% 
+    mutate(url_ = paste0("<a href='", restaurant_url,"'>",name,"</a>")) %>% 
+    select(url_, everything())
 ```
 
 
@@ -49,14 +51,13 @@ filt_menus <- reactive({
 ```{r}
 offerings <- reactive({
   filt_menus() %>%
-    group_by(restaurant_url, name, latitude, longitude, address, phone) %>%
+    group_by(restaurant_url, name, latitude, longitude, address, phone, url_) %>%
     summarise(meals = n_distinct(meal_idx),
               course = n_distinct(course_num),
               items = n_distinct(item)) %>% 
     arrange(desc(items)) %>% 
     ungroup() %>% 
-    mutate(url_ = paste0("<a href='", restaurant_url,"'>",name,"</a>"),
-           content = paste(url_, address, phone, 
+    mutate(content = paste(url_, address, phone, 
                            paste("# of meals =", meals), 
                            paste("# of courses =", course),
                            paste("# of items =", items),
@@ -87,7 +88,7 @@ row
 
 ```{r}
 renderValueBox({
-    valueBox(value = n_distinct(all_menus$url), 
+    valueBox(value = n_distinct(all_menus$url_), 
            caption = "<b># of Restaurants offering HRW and parsed</b>", 
            icon = "fa-cutlery", 
            color = "#77AF43")
@@ -122,7 +123,7 @@ Column {data-height=10000, data-width=1000, style="height:100pc;" .tabset .tabse
 ### Table view of HRW
 ```{r}
 DT::renderDataTable(filt_menus() %>% 
-                      select(-latitude, -longitude, -name), 
+                      select(-latitude, -longitude, -name, -restaurant_url), 
                       extensions = "Responsive", 
                       escape = FALSE,
                       filter = list(position = 'top', clear = TRUE, plain = FALSE),
