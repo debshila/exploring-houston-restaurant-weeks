@@ -1,5 +1,5 @@
 ---
-title: "Houston Restaurant Weeks, 2019"
+title: "Houston Restaurant Weeks, 2020"
 resource_files:
 - hrw_menus.csv
 runtime: shiny
@@ -30,7 +30,7 @@ library(leaflet)
 
 
 ```{r}
-all_menus <- read_csv("hrw_menus.csv") %>% 
+all_menus <- read_csv("hrw_menus_2020.csv") %>% 
     mutate(url_ = paste0("<a href='", restaurant_url,"'>",name,"</a>")) %>% 
     select(url_, everything())
 ```

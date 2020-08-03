@@ -45,6 +45,7 @@ course_idx_names <- paste0(c("first", "second", "third", "fourth"), collapse = "
 parse_menu <- function(menu_txt) {
     # Split by course
     split_meal <- strsplit(menu_txt, split = "course")
+    curbside_or_takeout <- grepl("curbside|take-out",split_meal[[1]])
     restaurant_info <-
         trimws(unlist(strsplit(split_meal[[length(split_meal)]], "\n")))
 
@@ -120,12 +121,14 @@ parse_menu <- function(menu_txt) {
 
                     # print(course_idx)
                     item_name_idx <- grep("^[[:upper:]]+|\\s$", items)
+                    # item_name_idx <- grep("first|second|third|fourth", items)
                     item_description_idx <-   item_name_idx + 1
                     menu <- data.frame(meal_idx,
                         course_num = course_idx - 1,
                         item = items[item_name_idx],
                         cost, cuisine_desc,
                         description = items[item_description_idx],
+                        curbside_or_takeout,
                         # weekday_only,
                         stringsAsFactors = FALSE,
                         check.names = TRUE)
@@ -187,11 +190,15 @@ all_menus <- all_menus %>%
     mutate(meal = if_else(cost == 45, "Dinner", "lunch/brunch")) %>%
     rename(restaurant_url = url)
 
+# all_menus %>%
+#     write_csv("~/Box Sync/hrw/hrw_menus.csv")
+
 all_menus %>%
-    write_csv("~/Box Sync/hrw/hrw_menus.csv")
+    write_csv("./hrw_menus_2020.csv")
+
 
 offerings <- all_menus %>%
-    group_by(name) %>%
+    group_by(name, latitude, longitude) %>%
     summarise(meals = n_distinct(meal_idx),
               course = n_distinct(course_num),
               items = n_distinct(item)) %>%
@@ -206,3 +213,63 @@ offerings_by_meal <- all_menus %>%
 lunch_br <- offerings %>%
     filter(course > 1)
 
+
+library(yelpr)
+key <- readLines("~/Box Sync/hrw/yelp_api_key.txt")
+
+
+library(httr)
+library(purrr)
+
+res <- POST("https://api.yelp.com/oauth2/token",
+            body = list(grant_type = "client_credentials",
+                        client_id = Sys.getenv(key[1]),
+                        client_secret = Sys.getenv(key[2])))
+token <- content(res)$access_token
+
+yelp <- "https://api.yelp.com"
+
+term <- "coffee"
+location <- "Vancouver, BC"
+limit <- 3
+(url <-
+        modify_url(yelp, path = c("v3", "businesses", "search"),
+                   query = list(term = term, location = location, limit = limit)))
+res <- GET(url, add_headers('Authorization' = paste("bearer", token)))
+http_status(res)
+
+yelp <- "https://api.yelp.com"
+term <- "sports"
+location <- "Philadelphia, PA"
+categories <- NULL
+limit <- 5
+radius <- 8000
+url <- modify_url(yelp, path = c("v3", "businesses", "search"),
+                  query = list(term = term, location = location,
+                               limit = limit,
+                               radius = radius))
+res <- GET(url, add_headers('Authorization' = paste("bearer", token)))
+
+results <- content(res)
+
+access_token <- get_access_token(client_id = key[1], client_secret = key[2])
+response <- POST("https://api.yelp.com/oauth2/token",
+                 query = list(grant_type = "client_credentials",
+                              client_id = key[1],
+                              client_secret = key[2]),
+                 encode = "json")
+stop_for_status(response)
+token <- content(response, as = "parsed")
+token$access_token
+yelp::business_search(latitude = offerings$latitude[1], longitude = offerings$longitude[1])
+
+
+tmp <- business_search(api_key = key,
+                    location = "Houston",
+                    latitude = offerings$latitude[1],
+                    longitude = offerings$longitude[1],
+                    term = "houston restaurant weeks",
+                    limit = 1)
+
+business_search_review(api_key = key,
+                unique(all_menus$name)[3])
